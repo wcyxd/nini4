@@ -1,4 +1,4 @@
 {
-  "serverless": true
+  "serverless": true,
   "start_command": "gunicorn app:app -w 4 -k uvicorn.workers.UvicornWorker"
 }
