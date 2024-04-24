@@ -1,6 +1,6 @@
-fastapi
+fastapi==0.63.0
 curl_cffi
-uvicorn
+uvicorn==0.13.4
 tiktoken
 python-dotenv
 gunicorn
