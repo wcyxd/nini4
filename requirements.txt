@@ -2,5 +2,5 @@ curl_cffi
 uvicorn==0.13.4
 tiktoken
 python-dotenv
-flask==2.1.4
-flask-cors==3.0.10
+flask
+flask-cors
