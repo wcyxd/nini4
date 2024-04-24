@@ -3,4 +3,3 @@ curl_cffi
 uvicorn==0.13.4
 tiktoken
 python-dotenv
-gunicorn
