@@ -1,61 +1,107 @@
-from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+# from fastapi import FastAPI, Request, Depends, HTTPException
+# from fastapi.responses import StreamingResponse, JSONResponse
+# from fastapi.middleware.cors import CORSMiddleware
+
+# from chatgpt.ChatService import ChatService
+# from chatgpt.reverseProxy import chatgpt_reverse_proxy
+# from utils.authorization import verify_token
+# from utils.retry import async_retry
+
+# app = FastAPI()
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
+
+# async def to_send_conversation(request_data, access_token):
+#     chat_service = ChatService(request_data, access_token)
+#     await chat_service.get_chat_requirements()
+#     return chat_service
+
+
+# @app.post("/v1/chat/completions")
+# async def send_conversation(request: Request, token=Depends(verify_token)):
+#     access_token = None
+#     if token and token.startswith("eyJhbGciOi"):
+#         access_token = token
+#     try:
+#         request_data = await request.json()
+#     except Exception:
+#         raise HTTPException(status_code=400, detail={"error": "Invalid JSON body"})
+
+#     chat_service = await async_retry(to_send_conversation, request_data, access_token)
+#     chat_service.prepare_send_conversation()
+
+#     stream = request_data.get("stream", False)
+#     if stream is True:
+#         return StreamingResponse(await chat_service.send_conversation_for_stream(), media_type="text/event-stream")
+#     else:
+#         return JSONResponse(await chat_service.send_conversation(), media_type="application/json")
+
+
+# @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH", "TRACE"])
+# async def reverse_proxy(request: Request, path: str):
+#     return await chatgpt_reverse_proxy(request, path)
+
+
+# if __name__ == "__main__":
+#     import uvicorn
+
+#     log_config = uvicorn.config.LOGGING_CONFIG
+#     default_format = "%(asctime)s | %(levelname)s | %(message)s"
+#     access_format = r'%(asctime)s | %(levelname)s | %(client_addr)s: %(request_line)s %(status_code)s'
+#     log_config["formatters"]["default"]["fmt"] = default_format
+#     log_config["formatters"]["access"]["fmt"] = access_format
+
+#     uvicorn.run("app:app", host="0.0.0.0", port=5005)    # 根据chatgpt建议添加send参数
+
+# 使用 Flask
+from flask import Flask, request, Response, jsonify
+from flask_cors import CORS
 
 from chatgpt.ChatService import ChatService
 from chatgpt.reverseProxy import chatgpt_reverse_proxy
 from utils.authorization import verify_token
 from utils.retry import async_retry
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+app = Flask(__name__)
+CORS(app)
 
 async def to_send_conversation(request_data, access_token):
     chat_service = ChatService(request_data, access_token)
     await chat_service.get_chat_requirements()
     return chat_service
 
-
-@app.post("/v1/chat/completions")
-async def send_conversation(request: Request, token=Depends(verify_token)):
+@app.route("/v1/chat/completions", methods=["POST"])
+async def send_conversation():
+    token = request.headers.get("Authorization")
     access_token = None
-    if token and token.startswith("eyJhbGciOi"):
-        access_token = token
+    if token and token.startswith("Bearer "):
+        access_token = token.split("Bearer ")[1]
+    
     try:
-        request_data = await request.json()
+        request_data = request.json
     except Exception:
-        raise HTTPException(status_code=400, detail={"error": "Invalid JSON body"})
-
+        return Response(response={"error": "Invalid JSON body"}, status=400, content_type="application/json")
+    
     chat_service = await async_retry(to_send_conversation, request_data, access_token)
     chat_service.prepare_send_conversation()
 
     stream = request_data.get("stream", False)
-    if stream is True:
-        return StreamingResponse(await chat_service.send_conversation_for_stream(), media_type="text/event-stream")
+    if stream:
+        return Response(response=await chat_service.send_conversation_for_stream(), status=200, content_type="text/event-stream")
     else:
-        return JSONResponse(await chat_service.send_conversation(), media_type="application/json")
+        return jsonify(await chat_service.send_conversation())
 
-
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH", "TRACE"])
-async def reverse_proxy(request: Request, path: str):
+@app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH", "TRACE"])
+async def reverse_proxy(path):
     return await chatgpt_reverse_proxy(request, path)
 
-
 if __name__ == "__main__":
-    import uvicorn
+    app.run(host="0.0.0.0", port=5005)
 
-    log_config = uvicorn.config.LOGGING_CONFIG
-    default_format = "%(asctime)s | %(levelname)s | %(message)s"
-    access_format = r'%(asctime)s | %(levelname)s | %(client_addr)s: %(request_line)s %(status_code)s'
-    log_config["formatters"]["default"]["fmt"] = default_format
-    log_config["formatters"]["access"]["fmt"] = access_format
-
-    uvicorn.run("app:app", host="0.0.0.0", port=5005)    # 根据chatgpt建议添加send参数
